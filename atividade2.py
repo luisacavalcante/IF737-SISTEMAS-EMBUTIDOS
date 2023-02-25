@@ -39,7 +39,6 @@ displayDezena = [
 ]
 
 for i in range(7):
-    print(i, displayUnidade[i], displayDezena[i])
     GPIO.setup(displayUnidade[i], GPIO.OUT)
     GPIO.setup(displayDezena[i], GPIO.OUT)
     GPIO.output(displayDezena[i], True)
@@ -100,7 +99,6 @@ def showNumberDisplay(display, number):
 def showNumber7Seg(number):
     if(number > 100):
         number = 99
-    print(number, int(number / 10) % 10, int(number % 10))
     showNumberDisplay(displayDezena, int(number/10) % 10)
     showNumberDisplay(displayUnidade, int(number) % 10)
 
@@ -125,7 +123,6 @@ def getDistance():
     return distance
 
 def ler_distancia():
-    print('lendo distancia')
     filterArray = []
     for sample in range(20) :
         filterArray.append(getDistance());
@@ -145,14 +142,14 @@ def verde():
     GPIO.output(LED_AMARELO, False)
     
 def amarelo():
-    GPIO.output(LED_VERDE, True)
+    GPIO.output(LED_VERDE, False)
     GPIO.output(LED_VERMELHO, False)
     GPIO.output(LED_AMARELO, True)
     
 def vermelho():
-    GPIO.output(LED_VERDE, True)
+    GPIO.output(LED_VERDE, False)
     GPIO.output(LED_VERMELHO, True)
-    GPIO.output(LED_AMARELO, True                                                                              )
+    GPIO.output(LED_AMARELO, False)
 
 def millis():
     return round(time.time() * 1000)
@@ -207,7 +204,7 @@ while True:
     checa_distancia = getDistance()
     #print(checa_distancia)
     lastBuzzerState, lastBuzzerTime = beep(checa_distancia, lastBuzzerState, lastBuzzerTime)
-    print("Last Buzzer State", lastBuzzerState)
+
     if(millis() - lastTime > 100):
         showNumber7Seg(checa_distancia)
         if(checa_distancia > MAXIMUM_DISTANCE):
