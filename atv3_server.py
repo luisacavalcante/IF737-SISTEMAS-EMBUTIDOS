@@ -1,26 +1,32 @@
-import RPi.GPIO as GPIO
+# import RPi.GPIO as GPIO
 import time
 from time import sleep
 import threading
 import socket
 import sys
 import json
+import random
 
 LED_VERDE = 8
 LED_AMARELO = 8
 LED_VERMELHO = 8
 LDR = 12
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(LED_VERDE, GPIO.OUT)
+LED_VERDE = 8
+LED_AMARELO = 8
+LED_VERMELHO = 8
+LDR = 12
+
+# GPIO.setmode(GPIO.BOARD)
+# GPIO.setup(LED_VERDE, GPIO.OUT)
 # GPIO.output(LED_VERDE, False)
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(LED_AMARELO, GPIO.OUT)
+# GPIO.setmode(GPIO.BOARD)
+# GPIO.setup(LED_AMARELO, GPIO.OUT)
 # GPIO.output(LED_AMARELO, False)
 
-GPIO.setmode(GPIO.BOARD)
-GPIO.setup(LED_VERMELHO, GPIO.OUT)
+# GPIO.setmode(GPIO.BOARD)
+# GPIO.setup(LED_VERMELHO, GPIO.OUT)
 # GPIO.output(LED_VERMELHO, False)
 
 mysock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -40,89 +46,121 @@ log_config = {
     "led_on": -1
 }
 
-def descarga():
-    GPIO.setup(LDR, GPIO.OUT)
-    GPIO.output(LDR, GPIO.LOW)
-    time.sleep(0.15)
-    
-def carga():
-    GPIO.setup(LDR, GPIO.IN)
-    contador = 0
-    while(GPIO.input(LDR) == GPIO.LOW):
-        contador = contador + 1
-    time.sleep(1)
-    return contador
+log_cars = {
+    0: {
+        "qtd": 0,
+    },
+    1: {
+        "qtd": 0,
+    },
+    2: {
+        "qtd": 0,
+    }
+}
 
-def leitura_analogica():
-    descarga()
-    return carga()
+
+# def descarga():
+#     GPIO.setup(LDR, GPIO.OUT)
+#     GPIO.output(LDR, GPIO.LOW)
+#     time.sleep(0.15)
+    
+# def carga():
+#     GPIO.setup(LDR, GPIO.IN)
+#     contador = 0
+#     while(GPIO.input(LDR) == GPIO.LOW):
+#         contador = contador + 1
+#     time.sleep(1)
+#     return contador
+
+# def leitura_analogica():
+#     descarga()
+#     return carga()
+
 
 
 def change_leds():
-    if log_config["led_on"] == 0:
-        # verde
-        # GPIO.output(LED_VERDE, True)
-        # GPIO.output(LED_VERMELHO, False)
-        # GPIO.output(LED_AMARELO, False)
-        print("verde")
-        time_on = log_config["sinal_verde"]
+
+    t0 = 0
         
-    elif log_config["led_on"] == 1:
-        # amarelo
-        # GPIO.output(LED_VERDE, False)
-        # GPIO.output(LED_VERMELHO, False)
-        # GPIO.output(LED_AMARELO, True)
-        print("amarelo")
-        time_on = log_config["sinal_amarelo"]
-        
-    elif log_config["led_on"] == 2:
-        # vermelho
-        # GPIO.output(LED_VERDE, False)
-        # GPIO.output(LED_VERMELHO, True)
-        # GPIO.output(LED_AMARELO, False)
-        print("vermelho")
-        time_on = log_config["sinal_vermelho"]
-        
-    else:
-        print("ERROR LED ON")
-    
-    
-        
-    if time.time() - t0 >= time_on:
+    while True:
+
+
+        # simulando um carro passando pelo sensor
+        number = random.randint(0, 10000000)
+        if number > 9999995:
+            print(number)
+            print("car detected on led: ", log_config["led_on"])
+            log_cars[log_config["led_on"]]["qtd"] += 1
+
+
         if log_config["led_on"] == 0:
-            log_config["led_on"] = 1
-            t0 = time.time()
-            print()
+            # verde
+            # GPIO.output(LED_VERDE, True)
+            # GPIO.output(LED_VERMELHO, False)
+            # GPIO.output(LED_AMARELO, False)
+            time_on = log_config["sinal_verde"]
+            
         elif log_config["led_on"] == 1:
-            log_config["led_on"] = 2
-            t0 = time.time()
-            print()
+            # amarelo
+            # GPIO.output(LED_VERDE, False)
+            # GPIO.output(LED_VERMELHO, False)
+            # GPIO.output(LED_AMARELO, True)
+            time_on = log_config["sinal_amarelo"]
+            
         elif log_config["led_on"] == 2:
-            log_config["led_on"] = 0
-            t0 = time.time()
-            print()
+            # vermelho
+            # GPIO.output(LED_VERDE, False)
+            # GPIO.output(LED_VERMELHO, True)
+            # GPIO.output(LED_AMARELO, False)
+            time_on = log_config["sinal_vermelho"]
+            
+        else:
+            print("ERROR LED ON")
+        
+        
+            
+        if time.time() - t0 >= time_on:
+            if log_config["led_on"] == 0:
+                log_config["led_on"] = 1
+                t0 = time.time()
+                print("verde -> amarelo")
+            elif log_config["led_on"] == 1:
+                log_config["led_on"] = 2
+                t0 = time.time()
+                print("amarelo -> vermelho")
+            elif log_config["led_on"] == 2:
+                log_config["led_on"] = 0
+                t0 = time.time()
+                print("vermelho -> verde")
 
 def main():
+
+    print("Server started")
+
     try:
-        mysock.bind(('', 8080))
+        mysock.bind(('127.0.0.1', 8080))
     except Exception as e:
         mysock.close()
         raise e
 
     mysock.listen()
 
+    thread = threading.Thread(target=change_leds)
 
-    t0 = 0
+
     time_on = -1
+
+    run_thread = False
 
     recc = False
     
     leds = threading.Thread(target=change_leds)
 
     while True:
-        if not log_config["config"]:
-            conn, addr = mysock.accept()
-            data = conn.recv(1000)
+        
+        conn, addr = mysock.accept()
+        data = conn.recv(1000)
+        print("receba")
         
         if data:
             data_msg = str(data.decode("utf-8"))
@@ -170,7 +208,16 @@ def main():
                     conn.sendall(json.dumps(error).encode("utf-8"))
             elif cmd["header"] == "R":
                 if log_config["config"]:
-                    pass
+                    print("config found")
+                    ret = {
+                        "header": "R",
+                        "body": {
+                            "carros_verde": log_cars[0]["qtd"],
+                            "carros_amarelo": log_cars[1]["qtd"],
+                            "carros_vermelho": log_cars[2]["qtd"]
+                        }
+                    }
+                    conn.sendall(json.dumps(ret).encode("utf-8"))
                 else:
                     print("config not found")
                     error = {
@@ -183,14 +230,14 @@ def main():
 
             print()
         
-        if log_config["config"]:
-            # thread
-            change_leds()
+        if log_config["config"] and not run_thread:
+            run_thread = True
+            thread.start()
+
         data = None
     mysock.close()
 
 
 if __name__ == "__main__":
     main()
-
 
