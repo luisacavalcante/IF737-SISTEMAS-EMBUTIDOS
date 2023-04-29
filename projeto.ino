@@ -1,7 +1,9 @@
 #include <HCSR04.h>
 #include "time.h"
 #include <WiFi.h>
-#include <PubSubClient.h> 
+#include <PubSubClient.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 
 #define ECHO_PIN 18
 #define TRIGGER_PIN 19
@@ -39,7 +41,9 @@ const char* clientID = "Weather_Reporter"; // MQTT client ID
 
 WiFiClient wiFiClient;
 
-PubSubClient pubSubClient(serverMQTT, 1883, wiFiClient); 
+PubSubClient pubSubClient(serverMQTT, 1883, wiFiClient);
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
 
 /**
  * @brief Máquina de estados
@@ -98,17 +102,18 @@ void lerSensorDistancia() {
   Serial.println(distanciaSensor);
 }
 
-void checkldr() {
-  int ldrValue = analogRead(LDR);
+void lerPesoPote() {
+  pesoPote = analogRead(LDR);
   Serial.print("LDR: ");
-  Serial.println(ldrValue);
+  Serial.println(pesoPote);
 }
 
-void buzzer() {
+void encherPote() {
   tone(BUZZER, buzzerFrequency);
-  delay(1000);
+}
+
+void pararEncherPote() {
   tone(BUZZER, 0);
-  delay(1000);
 }
 
 void maquina_estados() {
@@ -128,6 +133,7 @@ void maquina_estados() {
     case ENCHENDO_POTE:
       lerPesoPote();
       if(pesoPote >= PESO_CONFIGURACAO_MAXIMO) {
+        pararEncherPote();
         estado = ESPERANDO_ANIMAL_PARA_COMER;
         // TODO: Pegar essa hora corretamente
         // Salva a hora que encheu o pote
@@ -167,17 +173,26 @@ void esperaConfig(){
   configRecebida = true;
 }
 
-void lerPesoPote(){
-  // Lê o peso do pote
-}
-
-void encherPote(){
-  // Enche o pote
-}
-
 // Retorna true se deu horário de comer
 boolean deuHorarioDeComer() {
+  timeClient.update();
   return true;
+}
+
+void leitura_data_e_hora() {
+  //aguarda atualização
+  timeClient.update();
+  if (!timeClient.update()) {
+    timeClient.forceUpdate();
+  }
+    
+  formattedDate = timeClient.getFormattedTime();
+  //Separa data e imprime
+  splitT = formattedDate.indexOf("T");
+
+  //Separa hora e imprime
+  timeStamp = formattedDate.substring(splitT + 1, formattedDate.length());
+  //Serial.println(timeStamp);
 }
 
 void printLocalTime(){
