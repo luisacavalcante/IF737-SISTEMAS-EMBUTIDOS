@@ -49,12 +49,16 @@ PubSubClient pubSubClient(serverMQTT, 1883, wiFiClient);
 #define IDLE 1
 #define ENCHENDO_POTE 2
 #define ESPERANDO_ANIMAL_PARA_COMER 3
-#define ESPERA_ANIMAL_COMER 4
+#define ANIMAL_COMENDO 4
+#define COMEU_TUDO 5
+
+unsigned int horaEncheuPote = 0;
 
 unsigned char estado = INIT;
 boolean configRecebida = false;
 
-unsigned int PESO_CONFIGURACAO = 0;
+unsigned int PESO_CONFIGURACAO_MAXIMO = 0;
+unsigned int PESO_CONFIGURACAO_MINIMO = 0;
 unsigned int pesoPote = 0;
 
 int MAX_DISTANCE_CONFIG = 25;
@@ -113,28 +117,44 @@ void maquina_estados() {
       esperaConfig();
       if(configRecebida) {
         estado = IDLE;
-        encherPote();
       }
       break;
     case IDLE:
-      lerSensorDistancia();
-      lerPesoPote();
-      if(pesoPote < PESO_CONFIGURACAO && deuHorarioDeComer()&&distanciaSensor>MAX_DISTANCE_CONFIG) {
+      if(deuHorarioDeComer()) {
         estado = ENCHENDO_POTE;
-      } else if (pesoPote >= PESO_CONFIGURACAO&&distanciaSensor>MAX_DISTANCE_CONFIG) {
+        encherPote();
+      }
+      break;
+    case ENCHENDO_POTE:
+      lerPesoPote();
+      if(pesoPote >= PESO_CONFIGURACAO_MAXIMO) {
         estado = ESPERANDO_ANIMAL_PARA_COMER;
+        // TODO: Pegar essa hora corretamente
+        // Salva a hora que encheu o pote
+        horaEncheuPote = millis();
       }
       break;
     case ESPERANDO_ANIMAL_PARA_COMER:
       lerSensorDistancia();
       if(distanciaSensor <= MAX_DISTANCE_CONFIG) {
-        estado = ESPERA_ANIMAL_COMER;
+        estado = ANIMAL_COMENDO;
       }
       break;
-    case ESPERA_ANIMAL_COMER:
+    case ANIMAL_COMENDO:
       lerSensorDistancia();
       if(distanciaSensor > MAX_DISTANCE_CONFIG) {
-        estado = IDLE;
+        lerPesoPote();
+        if(pesoPote <= PESO_CONFIGURACAO_MINIMO){
+          estado = COMEU_TUDO;
+        } else {
+          estado = ESPERANDO_ANIMAL_PARA_COMER;
+        }
+      }
+      break;
+    case COMEU_TUDO:
+      if(deuHorarioDeComer()) {
+        estado = ENCHENDO_POTE;
+        encherPote();
       }
       break;
     default:
