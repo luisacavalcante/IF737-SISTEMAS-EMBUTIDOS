@@ -1,0 +1,231 @@
+#include <HCSR04.h>
+#include "time.h"
+#include <WiFi.h>
+#include <PubSubClient.h> 
+
+#define ECHO_PIN 18
+#define TRIGGER_PIN 19
+#define LDR 34
+#define BUZZER 33
+
+UltraSonicDistanceSensor distanceSensor(TRIGGER_PIN, ECHO_PIN);
+
+/**
+ * @brief Configurações do NTP
+ * 
+ */
+const char* ntpServer = "south-america.pool.ntp.org";
+const long  gmtOffset_sec = 0;
+const int   daylightOffset_sec = -10800;
+
+/**
+ * @brief Configuração do Wifi
+ * 
+ */
+// const char* ssid = "Kilner's House";
+// const char* password = "kilner131813";
+const char* ssid = "CINGUESTS";
+const char* password = "acessocin";
+
+/**
+ * @brief Configurações do MQTT
+ * 
+ */
+const char* serverMQTT = "192.168.*.*"; 
+const char* topicoComida = "comida";
+const char* usernameMQTT = "neo"; // MQTT username
+const char* passwordMQTT = "eglabs"; // MQTT password
+const char* clientID = "Weather_Reporter"; // MQTT client ID
+
+WiFiClient wiFiClient;
+
+PubSubClient pubSubClient(serverMQTT, 1883, wiFiClient); 
+
+/**
+ * @brief Máquina de estados
+ * 
+ */
+#define INIT 0
+#define IDLE 1
+#define ENCHENDO_POTE 2
+#define ESPERANDO_ANIMAL_PARA_COMER 3
+#define ESPERA_ANIMAL_COMER 4
+
+unsigned char estado = INIT;
+boolean configRecebida = false;
+
+unsigned int PESO_CONFIGURACAO = 0;
+unsigned int pesoPote = 0;
+
+int MAX_DISTANCE_CONFIG = 25;
+float distanciaSensor = 0;
+int maxLdrValue = 2000;
+int buzzerFrequency = 2000;
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  pinMode(BUZZER, OUTPUT);
+  delay(50);
+  Serial.println();
+  Serial.println("Projeto Sistemas Embutidos");
+
+  Serial.begin(115200);
+  
+  // Connect to MQTT
+  iniciarMQTTeWiFi();
+
+  // Necessário para obter a hora correta
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  printLocalTime();
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  // lerSensorDistancia();
+  // checkldr();
+  buzzer();
+  delay(20);
+}
+
+void lerSensorDistancia() {
+  distanciaSensor = distanceSensor.measureDistanceCm();
+  Serial.print("Distance(cm): ");
+  Serial.println(distanciaSensor);
+}
+
+void checkldr() {
+  int ldrValue = analogRead(LDR);
+  Serial.print("LDR: ");
+  Serial.println(ldrValue);
+}
+
+void buzzer() {
+  tone(BUZZER, buzzerFrequency);
+  delay(1000);
+  tone(BUZZER, 0);
+  delay(1000);
+}
+
+void maquina_estados() {
+  switch (estado) {
+    case INIT:
+      esperaConfig();
+      if(configRecebida) {
+        estado = IDLE;
+        encherPote();
+      }
+      break;
+    case IDLE:
+      lerSensorDistancia();
+      lerPesoPote();
+      if(pesoPote < PESO_CONFIGURACAO && deuHorarioDeComer()&&distanciaSensor>MAX_DISTANCE_CONFIG) {
+        estado = ENCHENDO_POTE;
+      } else if (pesoPote >= PESO_CONFIGURACAO&&distanciaSensor>MAX_DISTANCE_CONFIG) {
+        estado = ESPERANDO_ANIMAL_PARA_COMER;
+      }
+      break;
+    case ESPERANDO_ANIMAL_PARA_COMER:
+      lerSensorDistancia();
+      if(distanciaSensor <= MAX_DISTANCE_CONFIG) {
+        estado = ESPERA_ANIMAL_COMER;
+      }
+      break;
+    case ESPERA_ANIMAL_COMER:
+      lerSensorDistancia();
+      if(distanciaSensor > MAX_DISTANCE_CONFIG) {
+        estado = IDLE;
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+void esperaConfig(){
+  // Recebe uma configuração a ser utilizada da fog
+  configRecebida = true;
+}
+
+void lerPesoPote(){
+  // Lê o peso do pote
+}
+
+void encherPote(){
+  // Enche o pote
+}
+
+// Retorna true se deu horário de comer
+boolean deuHorarioDeComer() {
+  return true;
+}
+
+void printLocalTime(){
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+  Serial.print("Day of week: ");
+  Serial.println(&timeinfo, "%A");
+  Serial.print("Month: ");
+  Serial.println(&timeinfo, "%B");
+  Serial.print("Day of Month: ");
+  Serial.println(&timeinfo, "%d");
+  Serial.print("Year: ");
+  Serial.println(&timeinfo, "%Y");
+  Serial.print("Hour: ");
+  Serial.println(&timeinfo, "%H");
+  Serial.print("Hour (12 hour format): ");
+  Serial.println(&timeinfo, "%I");
+  Serial.print("Minute: ");
+  Serial.println(&timeinfo, "%M");
+  Serial.print("Second: ");
+  Serial.println(&timeinfo, "%S");
+
+  Serial.println("Time variables");
+  char timeHour[3];
+  strftime(timeHour,3, "%H", &timeinfo);
+  Serial.println(timeHour);
+  char timeWeekDay[10];
+  strftime(timeWeekDay,10, "%A", &timeinfo);
+  Serial.println(timeWeekDay);
+  Serial.println();
+}
+
+void iniciarMQTTeWiFi(){
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  // Connect to the WiFi
+  WiFi.begin(ssid, password);
+
+  // Wait until the connection is confirmed
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  // Debugging – Output the IP Address of the ESP8266
+  Serial.println("WiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // Connect to MQTT Broker
+  if (pubSubClient.connect(clientID, usernameMQTT, passwordMQTT)) {
+    Serial.println("Connected to MQTT Broker!");
+  }
+  else {
+    Serial.println("Connection to MQTT Broker failed…");
+  }
+}
+
+void publishMQTT(String topic, String message){
+  if (pubSubClient.connected()) {
+    pubSubClient.publish(topic.c_str(), message.c_str());
+  }
+  else {
+    Serial.println("MQTT Disconnected");
+  }
+}
