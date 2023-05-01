@@ -11,14 +11,14 @@
 #define BUZZER 33
 
 UltraSonicDistanceSensor distanceSensor(TRIGGER_PIN, ECHO_PIN);
- int dia = 0;
- int hora = 0;
- int minuto = 0;
- int segundo = 0;
- int hora_comida = 12;
- int minuto_comida = 0;
- int segundo_comida = 0;
- String formattedDate;
+int dia = 0;
+int hora = 0;
+int minuto = 0;
+int segundo = 0;
+int hora_comida = 12;
+int minuto_comida = 0;
+int segundo_comida = 0;
+String formattedDate;
 
 /**
  * @brief Configurações do NTP
