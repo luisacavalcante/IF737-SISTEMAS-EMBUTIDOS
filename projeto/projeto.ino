@@ -24,8 +24,6 @@ const int   daylightOffset_sec = -10800;
  * @brief Configuração do Wifi
  * 
  */
-// const char* ssid = "Kilner's House";
-// const char* password = "kilner131813";
 const char* ssid = "CINGUESTS";
 const char* password = "acessocin";
 
