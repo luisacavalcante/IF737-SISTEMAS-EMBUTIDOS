@@ -16,17 +16,12 @@ TOPIC = "pet"
 CLOUD_TOPIC_TO_SUBSCRIBE = "config"
 
 # MQTT Local
-BROKER_ENDPOINT = '172.22.192.1'
+BROKER_ENDPOINT = '127.0.0.1'
 PORT = 1884
 LOCAL_BROKER_TOPIC = "pet"
 # generate client ID with pub prefix randomly
 USERNAME_BROKER_LOCAL = 'teste'
 PASSWORD_BROKER_LOCAL = 'teste'
-
-def on_cloud_message_received(topic, payload, **kwargs):
-    print("Received message from topic '{}': {}".format(topic, payload))
-    mqtt_connection.publish(topic=TOPIC, payload=json.loads(payload), qos=mqtt.QoS.AT_LEAST_ONCE)
-    # print("Published: '" + payload + "' to the topic: " + topic)
 
 # Spin up resources
 event_loop_group = io.EventLoopGroup(1)
@@ -42,24 +37,41 @@ mqtt_connection = mqtt_connection_builder.mtls_from_path(
             clean_session=False,
             keep_alive_secs=6
             )
-print("Connecting to {} with client ID '{}'...".format(AWS_ENDPOINT, CLIENT_ID))
 
-# Make the connect() call
-connect_future = mqtt_connection.connect()
-# Future.result() waits until a result is available
-connect_future.result()
+config_received = False
+config_body = None
+client_global = None
 
-print("Connected!")
+def cloud_config():
+    print("Connecting to {} with client ID '{}'...".format(AWS_ENDPOINT, CLIENT_ID))
 
-subscribe_future, packet_id = mqtt_connection.subscribe(
-    topic=CLOUD_TOPIC_TO_SUBSCRIBE,
-    qos=mqtt.QoS.AT_LEAST_ONCE,
-    callback=on_cloud_message_received
-)
+    # Make the connect() call
+    connect_future = mqtt_connection.connect()
+    # Future.result() waits until a result is available
+    connect_future.result()
 
-print(f'Subscribed to AWS topic {CLOUD_TOPIC_TO_SUBSCRIBE}')
+    print("Connected!")
 
-# Publish message to server desired number of times.
+    subscribe_future, packet_id = mqtt_connection.subscribe(
+        topic=CLOUD_TOPIC_TO_SUBSCRIBE,
+        qos=mqtt.QoS.AT_LEAST_ONCE,
+        callback=on_cloud_message_received
+    )
+
+    print(f'Subscribed to AWS topic {CLOUD_TOPIC_TO_SUBSCRIBE}')
+
+
+def on_cloud_message_received(topic, payload, **kwargs):
+    global config_received
+    global config_body
+    
+    print("Received message from topic '{}': {}".format(topic, payload))
+
+    config_received = True
+    config_body = payload
+    
+    publish_config("config")
+        
 
 def connect_mqtt() -> mqtt_client:
     def on_connect(client, userdata, flags, rc):
@@ -76,20 +88,39 @@ def connect_mqtt() -> mqtt_client:
     return client
 
 
-def subscribe(client: mqtt_client):
+def subscribe():
+    global client_global
     def on_message(client, userdata, msg):
+        
+        # TODO
+        
         mqtt_connection.publish(topic=TOPIC, payload=json.dumps(msg.payload.decode()), qos=mqtt.QoS.AT_LEAST_ONCE)
         print(f"Received `{msg.payload.decode()}` from `{msg.topic}` topic")
-
-    client.subscribe(LOCAL_BROKER_TOPIC)
-    client.on_message = on_message
+    
+    
+    client_global.subscribe(LOCAL_BROKER_TOPIC)
+    client_global.on_message = on_message
     print(f'Subscribed to local MQTT Broker {LOCAL_BROKER_TOPIC}')
+    
+
+def publish_config(topic):
+    global config_body
+    global client_global
+    
+    if config_body is not None:
+        msg = config_body.decode("utf-8")
+        
+        result = client_global.publish(topic, json.dumps(msg))
+
 
 
 def run():
-    client = connect_mqtt()
-    subscribe(client)
-    client.loop_forever()
+    global client_global
+    cloud_config()
+    client_global = connect_mqtt()
+        
+    subscribe()
+    client_global.loop_forever()
 
 
 if __name__ == '__main__':

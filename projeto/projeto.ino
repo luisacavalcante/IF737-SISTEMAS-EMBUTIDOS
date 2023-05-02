@@ -32,17 +32,19 @@ const int   daylightOffset_sec = -10800;
  * @brief Configuração do Wifi
  * 
  */
+const char* ssid = "APT 103_OI FIBRA";
+const char* password = "jajejo22";
 // const char* ssid = "Kilner's House";
 // const char* password = "kilner131813";
-const char* ssid = "CINGUESTS";
-const char* password = "acessocin";
+// const char* ssid = "CINGUESTS";
+// const char* password = "acessocin";
 //const char *ssid     = "LIVE TIM_1901_2G";
 //const char *password = "danivalberlu";
 /**
  * @brief Configurações do MQTT
  * 
  */
-const char* serverMQTT = "172.22.71.18"; 
+const char* serverMQTT = "192.168.1.70"; 
 const char* topicoPublish = "pet";
 const char* topicoSubscribe = "config";
 const char* usernameMQTT = "teste"; // MQTT username
@@ -80,7 +82,7 @@ float distanciaSensor = 0;
 int maxLdrValue = 2000;
 int buzzerFrequency = 2000;
 
- int splitT = 0;
+int splitT = 0;
 
 void lerSensorDistancia() {
   distanciaSensor = distanceSensor.measureDistanceCm();
@@ -191,20 +193,7 @@ void leitura_data_e_hora() {
 
 
 
-void iniciarMQTTeWiFi(){
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-  // Connect to the WiFi
-  WiFi.begin(ssid, password);
-  // Wait until the connection is confirmed
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  // Debugging – Output the IP Address of the ESP8266
-  Serial.println("WiFi connected");
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
+void iniciaMQTT(){
   // Connect to MQTT Broker
   if (pubSubClient.connect(clientID, usernameMQTT, passwordMQTT)) {
     Serial.println("Connected to MQTT Broker!");
@@ -217,9 +206,8 @@ void iniciarMQTTeWiFi(){
 void subscribeMQTT(String topic){
   if (pubSubClient.connected()) {
     pubSubClient.subscribe(topic.c_str());
-    Serial.println("SUB");
-  }
-  else {
+    Serial.println("Subscribe successful");
+  } else {
     Serial.println("MQTT Disconnected");
   }
 }
@@ -233,26 +221,46 @@ void publishMQTT(String topic, String message){
   }
 }
 
-
-void callback(char* topic, byte* payload, unsigned int length){
-  Serial.print("Config received: [");
-  Serial.print(topic);
-  Serial.print("] ");
-
-  for (int i = 0; i < length ; i++) {
-    Serial.print((char) payload[i]);
+void reconnectMQTT() {
+  // Loop until we're reconnected
+  while (!pubSubClient.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (pubSubClient.connect(clientID)) {
+      Serial.println("connected");
+      pubSubClient.loop();
+      // Subscribe
+      pubSubClient.subscribe(topicoSubscribe);
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(pubSubClient.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
   }
+}
 
+
+void callback(char* topic, byte* message, unsigned int length) {
+  Serial.print("Message arrived on topic: ");
+  Serial.print(topic);
+  Serial.print(". Message: ");
+  String messageTemp;
+  
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)message[i]);
+    messageTemp += (char)message[i];
+  }
   Serial.println();
 }
 
 
 void conecta_internet() {
   Serial.print("Connecting to ");
-  Serial.println(ssid);
+  Serial.print(ssid);
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
-  {
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
@@ -275,14 +283,18 @@ void setup() {
   Serial.begin(115200);
   pinMode(BUZZER, OUTPUT);
   delay(50);
+  Serial.println(" __  ______  ______  ______  ______  ______  ______  ");
+  Serial.println("/\\ \\/\\  __ \\/\\__  _\\/\\  == \\/\\  ___\\/\\  __ \\/\\__  _\\ ");
+  Serial.println("\\ \\ \\ \\ \\/\\ \\/_/\\ \\/\\ \\  __<\\ \\  __\\\\ \\  __ \\/_/\\ \\/ ");
+  Serial.println(" \\ \\_\\ \\_____\\ \\ \\_\\ \\ \\_\\ \\_\\ \\_____\\ \\_\\ \\_\\ \\ \\_\\ ");
+  Serial.println("  \\/_/\\/_____/  \\/_/  \\/_/ /_/\\/_____/\\/_/\\/_/  \\/_/ ");
   Serial.println();
   Serial.println("Projeto Sistemas Embutidos");
 
-  Serial.begin(115200);
   conecta_internet();
-  //Serial.println(deuHorarioDeComer());
+
   // Connect to MQTT
-  iniciarMQTTeWiFi();
+  iniciaMQTT();
 
   subscribeMQTT(topicoSubscribe);
 
@@ -291,6 +303,11 @@ void setup() {
 }
 
 void loop() {
+  if (!pubSubClient.connected()) {
+    reconnectMQTT();
+  }
+  pubSubClient.loop();
+
   // put your main code here, to run repeatedly:
   // lerSensorDistancia();
   // checkldr();
