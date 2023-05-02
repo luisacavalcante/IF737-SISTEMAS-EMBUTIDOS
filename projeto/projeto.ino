@@ -1,7 +1,7 @@
 #include <HCSR04.h>
 #include "time.h"
 #include <WiFi.h>
-//#include <PubSubClient.h>
+#include <PubSubClient.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
@@ -34,23 +34,24 @@ const int   daylightOffset_sec = -10800;
  */
 // const char* ssid = "Kilner's House";
 // const char* password = "kilner131813";
-//const char* ssid = "CINGUESTS";
-//const char* password = "acessocin";
-const char *ssid     = "LIVE TIM_1901_2G";
-const char *password = "danivalberlu";
+const char* ssid = "CINGUESTS";
+const char* password = "acessocin";
+//const char *ssid     = "LIVE TIM_1901_2G";
+//const char *password = "danivalberlu";
 /**
  * @brief Configurações do MQTT
  * 
  */
-//const char* serverMQTT = "192.168.*.*"; 
-//const char* topicoComida = "comida";
-//const char* usernameMQTT = "neo"; // MQTT username
-//const char* passwordMQTT = "eglabs"; // MQTT password
-//const char* clientID = "Weather_Reporter"; // MQTT client ID
+const char* serverMQTT = "172.22.71.18"; 
+const char* topicoPublish = "pet";
+const char* topicoSubscribe = "config";
+const char* usernameMQTT = "teste"; // MQTT username
+const char* passwordMQTT = "teste"; // MQTT password
+const char* clientID = "IOTreat"; // MQTT client ID
 
 WiFiClient wiFiClient;
 
-//PubSubClient pubSubClient(serverMQTT, 1883, wiFiClient);
+PubSubClient pubSubClient(serverMQTT, 1884, wiFiClient);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 
@@ -104,7 +105,7 @@ void pararEncherPote() {
 void maquina_estados() {
   switch (estado) {
     case INIT:
-      esperaConfig();
+      // esperaConfig();
       if(configRecebida) {
         estado = IDLE;
       }
@@ -186,35 +187,24 @@ void leitura_data_e_hora() {
   hora = timeClient.getHours();
   minuto = timeClient.getMinutes();
   segundo =timeClient.getSeconds();
-  Serial.println("Dia lido"+String(dia));
-  Serial.println("Hora lida"+String(hora));
-  Serial.println("Minuto lido"+String(minuto));
-  Serial.println("Segundo lido"+String(segundo));
-  Serial.println("Hora prevista"+String(hora_comida));
-  Serial.println("Minuto previsto"+String(minuto_comida));
-  Serial.println("Segundo previsto"+String(segundo_comida));
 }
 
 
-/*
+
 void iniciarMQTTeWiFi(){
   Serial.print("Connecting to ");
   Serial.println(ssid);
-
   // Connect to the WiFi
   WiFi.begin(ssid, password);
-
   // Wait until the connection is confirmed
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-
   // Debugging – Output the IP Address of the ESP8266
   Serial.println("WiFi connected");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
-
   // Connect to MQTT Broker
   if (pubSubClient.connect(clientID, usernameMQTT, passwordMQTT)) {
     Serial.println("Connected to MQTT Broker!");
@@ -222,8 +212,18 @@ void iniciarMQTTeWiFi(){
   else {
     Serial.println("Connection to MQTT Broker failed…");
   }
-}*/
-/*
+}
+
+void subscribeMQTT(String topic){
+  if (pubSubClient.connected()) {
+    pubSubClient.subscribe(topic.c_str());
+    Serial.println("SUB");
+  }
+  else {
+    Serial.println("MQTT Disconnected");
+  }
+}
+
 void publishMQTT(String topic, String message){
   if (pubSubClient.connected()) {
     pubSubClient.publish(topic.c_str(), message.c_str());
@@ -231,8 +231,23 @@ void publishMQTT(String topic, String message){
   else {
     Serial.println("MQTT Disconnected");
   }
-}*/
- void conecta_internet() {
+}
+
+
+void callback(char* topic, byte* payload, unsigned int length){
+  Serial.print("Config received: [");
+  Serial.print(topic);
+  Serial.print("] ");
+
+  for (int i = 0; i < length ; i++) {
+    Serial.print((char) payload[i]);
+  }
+
+  Serial.println();
+}
+
+
+void conecta_internet() {
   Serial.print("Connecting to ");
   Serial.println(ssid);
   WiFi.begin(ssid, password);
@@ -265,18 +280,19 @@ void setup() {
 
   Serial.begin(115200);
   conecta_internet();
-  Serial.println(deuHorarioDeComer());
+  //Serial.println(deuHorarioDeComer());
   // Connect to MQTT
-  //iniciarMQTTeWiFi();
+  iniciarMQTTeWiFi();
 
-  // Necessário para obter a hora correta
-  //configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  //printLocalTime();
+  subscribeMQTT(topicoSubscribe);
+
+  pubSubClient.setCallback(callback);
+
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
   // lerSensorDistancia();
   // checkldr();
- // maquina_estados();
+  maquina_estados();
 }
