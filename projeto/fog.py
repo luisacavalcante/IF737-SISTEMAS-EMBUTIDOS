@@ -2,6 +2,7 @@ from awscrt import io, mqtt, auth, http
 from awsiot import mqtt_connection_builder
 from paho.mqtt import client as mqtt_client
 import time
+from datetime import datetime
 import json
 
 # AWS IOT Core
@@ -91,11 +92,17 @@ def connect_mqtt() -> mqtt_client:
 def subscribe():
     global client_global
     def on_message(client, userdata, msg):
+        m_decode = msg.payload.decode("utf-8","ignore")
         
-        # TODO
-        
-        mqtt_connection.publish(topic=TOPIC, payload=json.dumps(msg.payload.decode()), qos=mqtt.QoS.AT_LEAST_ONCE)
-        print(f"Received `{msg.payload.decode()}` from `{msg.topic}` topic")
+        m_in = json.loads(m_decode)
+        print(m_in)
+        print(datetime.now())
+        m_in["hora"] = 0
+        # m_in["hora"] = datetime.now()
+        print(m_in)
+        # m_encode = json.dumps(m_in)
+        # mqtt_connection.publish(topic=TOPIC, payload=m_encode, qos=mqtt.QoS.AT_LEAST_ONCE)
+        # print(f"Received {m_in} from {msg.topic} topic")
     
     
     client_global.subscribe(LOCAL_BROKER_TOPIC)
