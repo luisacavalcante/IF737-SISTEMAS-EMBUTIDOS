@@ -115,9 +115,7 @@ def publish_config(topic):
     global client_global
     
     if config_body is not None:
-        msg = config_body.decode("utf-8")
-        
-        result = client_global.publish(topic, json.dumps(msg))
+        client_global.publish(topic, config_body)
 
 
 
