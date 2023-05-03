@@ -4,6 +4,7 @@
 #include <PubSubClient.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include <ArduinoJson.h>
 
 #define ECHO_PIN 18
 #define TRIGGER_PIN 19
@@ -46,7 +47,7 @@ const int   daylightOffset_sec = -10800;
  * @brief Configurações do MQTT
  * 
  */
-const char* serverMQTT = "192.168.1.70"; 
+const char* serverMQTT = "172.22.71.18"; 
 const char* topicoPublish = "pet";
 const char* topicoSubscribe = "config";
 const char* usernameMQTT = "teste"; // MQTT username
@@ -113,7 +114,7 @@ void pararEncherPote() {
 void maquina_estados() {
   switch (estado) {
     case INIT:
-       esperaConfig();
+       
       if(configRecebida) {
         estado = IDLE;
       }
@@ -168,13 +169,7 @@ void maquina_estados() {
   }
 }
 
-void esperaConfig(){
-  // Recebe uma configuração a ser utilizada da fog
-  configRecebida = true;
-}
 
-// Retorna true se deu horário de comer
-// transformar string de data em int (segundo, minuto e hora para comparação)
 boolean deuHorarioDeComer() {
  leitura_data_e_hora();
   if(hora>hora_comida){
@@ -248,7 +243,9 @@ void subscribeMQTT(String topic){
 }
 
 void publishMQTT(String topic, String message){
+  Serial.println("Entrei no publishMQTT");
   if (pubSubClient.connected()) {
+    Serial.println("Conexão funcionando");
     pubSubClient.publish(topic.c_str(), message.c_str());
   }
   else {
@@ -281,12 +278,24 @@ void callback(char* topic, byte* message, unsigned int length) {
   Serial.print(topic);
   Serial.print(". Message: ");
   String messageTemp;
-  
+
+
   for (int i = 0; i < length; i++) {
-    Serial.print((char)message[i]);
+   // Serial.print((char)message[i]);
     messageTemp += (char)message[i];
   }
-  Serial.println();
+
+  
+  Serial.println(messageTemp);
+
+  if(topic == "config"){
+    configRecebida = true;
+    //DynamicJsonDocument doc(1024);
+    //DeseralizeJson(doc,messageTemp);
+    //Serial.println("n_vezes:"+ doc["n_vezes"]);
+  }
+  
+  
 }
 
 
@@ -334,7 +343,7 @@ void setup() {
   subscribeMQTT(topicoSubscribe);
 
   pubSubClient.setCallback(callback);
-
+  publishMQTT(topicoPublish, "Oi");
 }
 
 void loop() {
@@ -343,7 +352,6 @@ void loop() {
   }
   pubSubClient.loop();
 
-  // put your main code here, to run repeatedly:
    lerSensorDistancia();
    if(distanciaSensor == -1){
      //Serial.println("Erro no sensor de distancia");
