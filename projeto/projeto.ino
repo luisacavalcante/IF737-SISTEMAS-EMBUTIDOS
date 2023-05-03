@@ -294,9 +294,35 @@ void callback(char* topic, byte* message, unsigned int length) {
     //DynamicJsonDocument doc(1024);
     //DeseralizeJson(doc,messageTemp);
     Serial.println("Entrei no topic==config");
+    // configRecebida = true;
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, messageTemp);
+    
+    MAX_DISTANCE_CONFIG = (int) doc["max_distance"];
+    PESO_CONFIGURACAO_MAXIMO = (int) doc["peso_max"];
+    PESO_CONFIGURACAO_MINIMO = (int) doc["peso_min"];
+    
+    Serial.print("Distancia maxima: "); Serial.println(MAX_DISTANCE_CONFIG);
+  
+    Serial.print("Peso maximo: "); Serial.println(PESO_CONFIGURACAO_MAXIMO);
+
+    Serial.print("Peso minimo: "); Serial.println(PESO_CONFIGURACAO_MINIMO);
   }
-  
-  
+}
+
+void sendData(int tipo){
+  DynamicJsonDocument doc(1024);
+  int peso = random(4000);
+  doc["tipo"] = tipo;
+  doc["peso"] = pesoPote;
+
+  char out[256];
+  int b = serializeJson(doc, out);
+  Serial.print("bytes = ");
+  Serial.println(b, DEC);
+  Serial.print("Enviando - tipo: "); Serial.print(tipo); Serial.print(" peso "); Serial.print(peso); Serial.print(" hora "); Serial.println(formattedDate);
+
+  pubSubClient.publish("pet", out);
 }
 
 
@@ -347,18 +373,34 @@ void setup() {
   publishMQTT(topicoPublish, "Oi");
 }
 
+void testComm(){
+  DynamicJsonDocument doc(1024);
+  doc["distancia"] = random(100);
+  doc["peso"] = random(100);
+  leitura_data_e_hora();
+  doc["hora"] = formattedDate;
+
+  char out[256];
+  int b = serializeJson(doc, out);
+  Serial.print("bytes = ");
+  Serial.println(b, DEC);
+
+  pubSubClient.publish("pet", out);
+}
+
 void loop() {
   if (!pubSubClient.connected()) {
     reconnectMQTT();
   }
   pubSubClient.loop();
 
-   lerSensorDistancia();
-   lerPesoPote();
-   if(distanciaSensor == -1){
-     //Serial.println("Erro no sensor de distancia");
-   }
+  // lerSensorDistancia();
+  // lerPesoPote();
+  // if(distanciaSensor == -1){
+  //   //Serial.println("Erro no sensor de distancia");
+  // }
+  testComm();
+  delay(1000);
 
-
-  maquina_estados();
+  // maquina_estados();
 }
