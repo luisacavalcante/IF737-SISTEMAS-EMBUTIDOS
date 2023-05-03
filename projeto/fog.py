@@ -92,17 +92,11 @@ def connect_mqtt() -> mqtt_client:
 def subscribe():
     global client_global
     def on_message(client, userdata, msg):
-        m_decode = msg.payload.decode("utf-8","ignore")
+        m_in = json.loads(json.loads(msg.payload.decode()))
         
-        m_in = json.loads(m_decode)
-        print(m_in)
-        print(datetime.now())
-        m_in["hora"] = 0
-        # m_in["hora"] = datetime.now()
-        print(m_in)
-        # m_encode = json.dumps(m_in)
-        # mqtt_connection.publish(topic=TOPIC, payload=m_encode, qos=mqtt.QoS.AT_LEAST_ONCE)
-        # print(f"Received {m_in} from {msg.topic} topic")
+        m_in["data"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        mqtt_connection.publish(topic=TOPIC, payload=json.dumps(m_in), qos=mqtt.QoS.AT_LEAST_ONCE)
+        print(f"Received {m_in} from {msg.topic} topic")
     
     
     client_global.subscribe(LOCAL_BROKER_TOPIC)

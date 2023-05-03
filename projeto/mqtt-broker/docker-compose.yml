@@ -4,6 +4,7 @@ services:
   broker:
     image: eclipse-mosquitto
     user: mosquitto
+    restart: always
     volumes:
       - mosquitto_data:/mosquitto/data
       - mosquitto_data:/mosquitto/log

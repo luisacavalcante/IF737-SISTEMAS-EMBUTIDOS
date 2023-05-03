@@ -2,11 +2,13 @@ import random
 import time
 import json
 from paho.mqtt import client as mqtt_client
+from datetime import datetime
+import random
 
 
 broker = '127.0.0.1'
 port = 1884
-topic = "config"
+topic = "pet"
 # generate client ID with pub prefix randomly
 client_id = f'python-mqtt-{random.randint(0, 1000)}'
 username = 'teste'
@@ -30,7 +32,8 @@ def publish(client):
     msg_count = 0
     while True:
         time.sleep(1)
-        msg = f"messages: {msg_count}"
+        dict = {'tipo': random.randint(0, 2), 'peso': random.randint(0, 4000)}
+        msg = json.dumps(dict)
         result = client.publish(topic, json.dumps(msg))
         # result: [0, 1]
         status = result[0]
