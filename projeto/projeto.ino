@@ -274,7 +274,17 @@ void reconnectMQTT() {
 }
 
 
-void callback(char* topic, byte* message, unsigned int length) {
+void callback(char* topic, byte* payload, unsigned int length) {
+  StaticJsonDocument<256> doc;
+  DeserializationError error = deserializeJson(doc, payload, length);
+
+  // Test if parsing succeeds.
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.f_str());
+    return;
+  }
+
   Serial.print("Message arrived on topic: ");
   Serial.print(topic);
   Serial.print(". Message: ");
@@ -283,20 +293,18 @@ void callback(char* topic, byte* message, unsigned int length) {
 
   for (int i = 0; i < length; i++) {
    // Serial.print((char)message[i]);
-    messageTemp += (char)message[i];
+    messageTemp += (char) payload[i];
   }
 
   
   Serial.println(messageTemp);
 
   if(String(topic) == "config"){
-    configRecebida = true;
+    // configRecebida = true;
     //DynamicJsonDocument doc(1024);
     //DeseralizeJson(doc,messageTemp);
     Serial.println("Entrei no topic==config");
     // configRecebida = true;
-    DynamicJsonDocument doc(1024);
-    deserializeJson(doc, messageTemp);
     
     MAX_DISTANCE_CONFIG = (int) doc["max_distance"];
     PESO_CONFIGURACAO_MAXIMO = (int) doc["peso_max"];
@@ -311,8 +319,7 @@ void callback(char* topic, byte* message, unsigned int length) {
 }
 
 void sendData(int tipo){
-  DynamicJsonDocument doc(1024);
-  int peso = random(4000);
+  DynamicJsonDocument doc(1024); 
   doc["tipo"] = tipo;
   doc["peso"] = pesoPote;
 
@@ -320,7 +327,7 @@ void sendData(int tipo){
   int b = serializeJson(doc, out);
   Serial.print("bytes = ");
   Serial.println(b, DEC);
-  Serial.print("Enviando - tipo: "); Serial.print(tipo); Serial.print(" peso "); Serial.print(peso); Serial.print(" hora "); Serial.println(formattedDate);
+  Serial.print("Enviando - tipo: "); Serial.print(tipo); Serial.print(" peso "); Serial.print(pesoPote); Serial.print(" hora "); Serial.println(formattedDate);
 
   pubSubClient.publish("pet", out);
 }
@@ -370,22 +377,6 @@ void setup() {
   subscribeMQTT(topicoSubscribe);
 
   pubSubClient.setCallback(callback);
-  publishMQTT(topicoPublish, "Oi");
-}
-
-void testComm(){
-  DynamicJsonDocument doc(1024);
-  doc["distancia"] = random(100);
-  doc["peso"] = random(100);
-  leitura_data_e_hora();
-  doc["hora"] = formattedDate;
-
-  char out[256];
-  int b = serializeJson(doc, out);
-  Serial.print("bytes = ");
-  Serial.println(b, DEC);
-
-  pubSubClient.publish("pet", out);
 }
 
 void loop() {
@@ -399,8 +390,5 @@ void loop() {
   // if(distanciaSensor == -1){
   //   //Serial.println("Erro no sensor de distancia");
   // }
-  testComm();
-  delay(1000);
-
-  // maquina_estados();
+  maquina_estados();
 }
