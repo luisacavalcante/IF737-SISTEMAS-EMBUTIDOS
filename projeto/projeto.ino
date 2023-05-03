@@ -47,7 +47,7 @@ const int   daylightOffset_sec = -10800;
  * @brief Configurações do MQTT
  * 
  */
-const char* serverMQTT = "172.22.71.18"; 
+const char* serverMQTT = "172.22.67.158"; 
 const char* topicoPublish = "pet";
 const char* topicoSubscribe = "config";
 const char* usernameMQTT = "teste"; // MQTT username
@@ -76,8 +76,8 @@ unsigned int horaEncheuPote = 0;
 unsigned char estado = INIT;
 boolean configRecebida = false;
 String horario_comida = "11:32:30";
-unsigned int PESO_CONFIGURACAO_MAXIMO = 2000;
-unsigned int PESO_CONFIGURACAO_MINIMO = 0;
+unsigned int PESO_CONFIGURACAO_MAXIMO = 2500;
+unsigned int PESO_CONFIGURACAO_MINIMO = 1800;
 unsigned int pesoPote = 0;
 
 int MAX_DISTANCE_CONFIG = 10;
@@ -89,16 +89,14 @@ int splitT = 0;
 
 void lerSensorDistancia() {
   distanciaSensor = distanceSensor.measureDistanceCm();
-  //Serial.print("Distance(cm): ");
-  //Serial.println(distanciaSensor);
-  delay(20);
+ // Serial.print("Distance(cm): ");
+ // Serial.println(distanciaSensor);
 }
 
 void lerPesoPote() {
   pesoPote = analogRead(LDR);
- // Serial.print("Peso do pote de comida: ");
- // Serial.println(pesoPote);
-  delay(20);
+ //Serial.print("Peso do pote de comida: ");
+  //Serial.println(pesoPote);
 }
 
 void encherPote() {
@@ -139,16 +137,19 @@ void maquina_estados() {
     case ESPERANDO_ANIMAL_PARA_COMER:
     
       lerSensorDistancia();
-      if(distanciaSensor <= MAX_DISTANCE_CONFIG) {
+      if(distanciaSensor <= MAX_DISTANCE_CONFIG && distanciaSensor>0) {
         estado = ANIMAL_COMENDO;
         Serial.println("O animal está comendo");
       }
       break;
     case ANIMAL_COMENDO:
       lerSensorDistancia();
-      if(distanciaSensor > MAX_DISTANCE_CONFIG && distanciaSensor!=-1) {
+      //Serial.println("distanciaSensor "+String(distanciaSensor));
+      if(distanciaSensor > MAX_DISTANCE_CONFIG) {
         lerPesoPote();
+        Serial.println("pesoPote "+String(pesoPote));
         if(pesoPote <= PESO_CONFIGURACAO_MINIMO){
+          
           estado = COMEU_TUDO;
           ja_comeu = true;
           Serial.println("O animal comeu tudo");
@@ -257,7 +258,7 @@ void reconnectMQTT() {
   while (!pubSubClient.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
-    if (pubSubClient.connect(clientID)) {
+   if (pubSubClient.connect(clientID, usernameMQTT, passwordMQTT)) {
       Serial.println("connected");
       pubSubClient.loop();
       // Subscribe
@@ -288,11 +289,11 @@ void callback(char* topic, byte* message, unsigned int length) {
   
   Serial.println(messageTemp);
 
-  if(topic == "config"){
+  if(String(topic) == "config"){
     configRecebida = true;
     //DynamicJsonDocument doc(1024);
     //DeseralizeJson(doc,messageTemp);
-    //Serial.println("n_vezes:"+ doc["n_vezes"]);
+    Serial.println("Entrei no topic==config");
   }
   
   
@@ -353,6 +354,7 @@ void loop() {
   pubSubClient.loop();
 
    lerSensorDistancia();
+   lerPesoPote();
    if(distanciaSensor == -1){
      //Serial.println("Erro no sensor de distancia");
    }
