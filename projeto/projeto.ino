@@ -11,14 +11,16 @@
 #define BUZZER 33
 
 UltraSonicDistanceSensor distanceSensor(TRIGGER_PIN, ECHO_PIN);
+
 int dia = 0;
 int hora = 0;
 int minuto = 0;
 int segundo = 0;
-int hora_comida = 12;
-int minuto_comida = 0;
+int hora_comida = 9;
+int minuto_comida = 36;
 int segundo_comida = 0;
 String formattedDate;
+bool ja_comeu = false;
 
 /**
  * @brief Configurações do NTP
@@ -32,12 +34,12 @@ const int   daylightOffset_sec = -10800;
  * @brief Configuração do Wifi
  * 
  */
-const char* ssid = "APT 103_OI FIBRA";
-const char* password = "jajejo22";
+//const char* ssid = "APT 103_OI FIBRA";
+//const char* password = "jajejo22";
 // const char* ssid = "Kilner's House";
 // const char* password = "kilner131813";
-// const char* ssid = "CINGUESTS";
-// const char* password = "acessocin";
+ const char* ssid = "CINGUESTS";
+ const char* password = "acessocin";
 //const char *ssid     = "LIVE TIM_1901_2G";
 //const char *password = "danivalberlu";
 /**
@@ -73,11 +75,11 @@ unsigned int horaEncheuPote = 0;
 unsigned char estado = INIT;
 boolean configRecebida = false;
 String horario_comida = "11:32:30";
-unsigned int PESO_CONFIGURACAO_MAXIMO = 0;
+unsigned int PESO_CONFIGURACAO_MAXIMO = 2000;
 unsigned int PESO_CONFIGURACAO_MINIMO = 0;
 unsigned int pesoPote = 0;
 
-int MAX_DISTANCE_CONFIG = 25;
+int MAX_DISTANCE_CONFIG = 10;
 float distanciaSensor = 0;
 int maxLdrValue = 2000;
 int buzzerFrequency = 2000;
@@ -86,28 +88,32 @@ int splitT = 0;
 
 void lerSensorDistancia() {
   distanciaSensor = distanceSensor.measureDistanceCm();
-  Serial.print("Distance(cm): ");
-  Serial.println(distanciaSensor);
+  //Serial.print("Distance(cm): ");
+  //Serial.println(distanciaSensor);
+  delay(20);
 }
 
 void lerPesoPote() {
   pesoPote = analogRead(LDR);
-  Serial.print("LDR: ");
-  Serial.println(pesoPote);
+ // Serial.print("Peso do pote de comida: ");
+ // Serial.println(pesoPote);
+  delay(20);
 }
 
 void encherPote() {
   tone(BUZZER, buzzerFrequency);
+  delay(5000);
 }
 
 void pararEncherPote() {
+  Serial.println("O pote está cheio");
   tone(BUZZER, 0);
 }
 
 void maquina_estados() {
   switch (estado) {
     case INIT:
-      // esperaConfig();
+       esperaConfig();
       if(configRecebida) {
         estado = IDLE;
       }
@@ -123,30 +129,36 @@ void maquina_estados() {
       if(pesoPote >= PESO_CONFIGURACAO_MAXIMO) {
         pararEncherPote();
         estado = ESPERANDO_ANIMAL_PARA_COMER;
+        Serial.println("Esperando animal para comer");
         // TODO: Pegar essa hora corretamente
         // Salva a hora que encheu o pote
         horaEncheuPote = millis();
       }
       break;
     case ESPERANDO_ANIMAL_PARA_COMER:
+    
       lerSensorDistancia();
       if(distanciaSensor <= MAX_DISTANCE_CONFIG) {
         estado = ANIMAL_COMENDO;
+        Serial.println("O animal está comendo");
       }
       break;
     case ANIMAL_COMENDO:
       lerSensorDistancia();
-      if(distanciaSensor > MAX_DISTANCE_CONFIG) {
+      if(distanciaSensor > MAX_DISTANCE_CONFIG && distanciaSensor!=-1) {
         lerPesoPote();
         if(pesoPote <= PESO_CONFIGURACAO_MINIMO){
           estado = COMEU_TUDO;
+          ja_comeu = true;
+          Serial.println("O animal comeu tudo");
         } else {
           estado = ESPERANDO_ANIMAL_PARA_COMER;
+          Serial.println("O animal veio no pote mas não comeu tudo ainda");
         }
       }
       break;
     case COMEU_TUDO:
-      if(deuHorarioDeComer()) {
+      if(deuHorarioDeComer() && ja_comeu==false) {
         estado = ENCHENDO_POTE;
         encherPote();
       }
@@ -165,15 +177,35 @@ void esperaConfig(){
 // transformar string de data em int (segundo, minuto e hora para comparação)
 boolean deuHorarioDeComer() {
  leitura_data_e_hora();
- 
-  if(hora>=hora_comida){
-    if(minuto>=minuto_comida){
-      if(segundo>=segundo_comida){
-        return true;
-      } 
+  if(hora>hora_comida){
+    if(ja_comeu==false){
+      Serial.println("Deu a hora de comer");
+
     }
+    return true;
+  }else{
+      if(hora==hora_comida){
+          if(minuto>minuto_comida){
+            return true;
+          }else{
+            if(minuto==minuto_comida){
+              if(segundo>=segundo_comida){
+                
+                return true;
+              } else{
+                return false;
+              }
+            }else{
+              return false;
+            }
+          }
+      }else{
+        return false;
+      }
+    
+
   }
-  return false;
+ 
   
 
 }
@@ -189,6 +221,9 @@ void leitura_data_e_hora() {
   hora = timeClient.getHours();
   minuto = timeClient.getMinutes();
   segundo =timeClient.getSeconds();
+  if(hora == 0){
+    ja_comeu = false;
+  }
 }
 
 
@@ -222,7 +257,6 @@ void publishMQTT(String topic, String message){
 }
 
 void reconnectMQTT() {
-  // Loop until we're reconnected
   while (!pubSubClient.connected()) {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
@@ -294,6 +328,7 @@ void setup() {
   conecta_internet();
 
   // Connect to MQTT
+
   iniciaMQTT();
 
   subscribeMQTT(topicoSubscribe);
@@ -309,7 +344,11 @@ void loop() {
   pubSubClient.loop();
 
   // put your main code here, to run repeatedly:
-  // lerSensorDistancia();
-  // checkldr();
+   lerSensorDistancia();
+   if(distanciaSensor == -1){
+     //Serial.println("Erro no sensor de distancia");
+   }
+
+
   maquina_estados();
 }
