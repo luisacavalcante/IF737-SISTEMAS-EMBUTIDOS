@@ -6,11 +6,18 @@
 #include <WiFiUdp.h>
 #include <ArduinoJson.h>
 
+const int buttonPin = 15;  // Pino digital conectado ao botão
+bool ledState = false;    // Variável para armazenar o estado do LED
+unsigned long lastDebounceTime = 0;  // Último momento em que o botão foi acionado
+unsigned long debounceDelay = 50;   
+
 #define ECHO_PIN 18
 #define TRIGGER_PIN 19
 #define LDR 34
 #define BUZZER 33
-
+#define TIPO_COMEU_TUDO 0
+#define TIPO_NAO_COMEU_TUDO 1
+#define TIPO_NAO_FOI_NO_POTE 2
 UltraSonicDistanceSensor distanceSensor(TRIGGER_PIN, ECHO_PIN);
 
 int dia = 0;
@@ -22,7 +29,7 @@ int minuto_comida = 36;
 int segundo_comida = 0;
 String formattedDate;
 bool ja_comeu = false;
-
+int tempo_decorrido = 3600000; // em segundos -> 1h
 /**
  * @brief Configurações do NTP
  * 
@@ -73,6 +80,11 @@ NTPClient timeClient(ntpUDP);
 
 unsigned int horaEncheuPote = 0;
 
+int tam_horas = 5;
+unsigned int HORAS[5] = {0,0,0,0,0};
+unsigned int proxima_hora = 0; 
+unsigned int N_VEZES = 0;
+
 unsigned char estado = INIT;
 boolean configRecebida = false;
 String horario_comida = "11:32:30";
@@ -86,6 +98,7 @@ int maxLdrValue = 2000;
 int buzzerFrequency = 2000;
 
 int splitT = 0;
+
 
 void lerSensorDistancia() {
   distanciaSensor = distanceSensor.measureDistanceCm();
@@ -141,6 +154,12 @@ void maquina_estados() {
         estado = ANIMAL_COMENDO;
         Serial.println("O animal está comendo");
       }
+      if (millis() - horaEncheuPote >= tempo_decorrido) {  // check if one hour has passed
+          // o animal não comeu
+          Serial.println("O animal não foi no pote");
+          sendData(TIPO_NAO_FOI_NO_POTE);
+
+      }
       break;
     case ANIMAL_COMENDO:
       lerSensorDistancia();
@@ -152,15 +171,32 @@ void maquina_estados() {
           
           estado = COMEU_TUDO;
           ja_comeu = true;
+
+          if (proxima_hora == N_VEZES-1) {
+            proxima_hora = 0;
+          } else {
+            proxima_hora++;
+          }
+
+          hora_comida = HORAS[proxima_hora];
+          Serial.println("Proxima hora: " + String(hora_comida));
+
           Serial.println("O animal comeu tudo");
+          sendData(TIPO_COMEU_TUDO);
         } else {
           estado = ESPERANDO_ANIMAL_PARA_COMER;
           Serial.println("O animal veio no pote mas não comeu tudo ainda");
+          sendData(TIPO_NAO_COMEU_TUDO);
         }
       }
       break;
     case COMEU_TUDO:
-      if(deuHorarioDeComer() && ja_comeu==false) {
+      Serial.println("---------------");
+      Serial.println(deuHorarioDeComer());
+      Serial.println(ja_comeu);
+      Serial.println(ledState);
+      Serial.println("---------------");
+      if((deuHorarioDeComer() && ja_comeu==false) || !ledState) {
         estado = ENCHENDO_POTE;
         encherPote();
       }
@@ -176,7 +212,6 @@ boolean deuHorarioDeComer() {
   if(hora>hora_comida){
     if(ja_comeu==false){
       Serial.println("Deu a hora de comer");
-
     }
     return true;
   }else{
@@ -216,8 +251,8 @@ void leitura_data_e_hora() {
   dia = timeClient.getDay();
   hora = timeClient.getHours();
   minuto = timeClient.getMinutes();
-  segundo =timeClient.getSeconds();
-  if(hora == 0){
+  segundo = timeClient.getSeconds();
+  if(hora > HORAS[proxima_hora]){
     ja_comeu = false;
   }
 }
@@ -300,15 +335,25 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println(messageTemp);
 
   if(String(topic) == "config"){
-    // configRecebida = true;
+     configRecebida = true;
     //DynamicJsonDocument doc(1024);
     //DeseralizeJson(doc,messageTemp);
     Serial.println("Entrei no topic==config");
-    // configRecebida = true;
     
     MAX_DISTANCE_CONFIG = (int) doc["max_distance"];
     PESO_CONFIGURACAO_MAXIMO = (int) doc["peso_max"];
     PESO_CONFIGURACAO_MINIMO = (int) doc["peso_min"];
+    N_VEZES = (int) doc["n_vezes"];
+    if (N_VEZES > tam_horas) {
+      N_VEZES = tam_horas;
+    }
+    for (int i = 0; i < N_VEZES; i++) {
+      const char * horas_aux = doc["horas"][i];
+      HORAS[i] = 10*((int) horas_aux[0] - '0') + ((int) horas_aux[1] - '0');
+    }
+
+    hora_comida = HORAS[0];
+    proxima_hora = 0;
     
     Serial.print("Distancia maxima: "); Serial.println(MAX_DISTANCE_CONFIG);
   
@@ -319,15 +364,17 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 void sendData(int tipo){
+  lerPesoPote();
   DynamicJsonDocument doc(1024); 
   doc["tipo"] = tipo;
   doc["peso"] = pesoPote;
 
   char out[256];
   int b = serializeJson(doc, out);
-  Serial.print("bytes = ");
-  Serial.println(b, DEC);
-  Serial.print("Enviando - tipo: "); Serial.print(tipo); Serial.print(" peso "); Serial.print(pesoPote); Serial.print(" hora "); Serial.println(formattedDate);
+  //Serial.print("bytes = ");
+ // Serial.println(b, DEC);
+  // Serial.print("Enviando para a fog tipo: "); Serial.print(tipo); Serial.print(" peso "); Serial.println(pesoPote); 
+
 
   pubSubClient.publish("pet", out);
 }
@@ -359,6 +406,7 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
   pinMode(BUZZER, OUTPUT);
+  pinMode(buttonPin, INPUT_PULLUP);
   delay(50);
   Serial.println(" __  ______  ______  ______  ______  ______  ______  ");
   Serial.println("/\\ \\/\\  __ \\/\\__  _\\/\\  == \\/\\  ___\\/\\  __ \\/\\__  _\\ ");
@@ -391,4 +439,11 @@ void loop() {
   //   //Serial.println("Erro no sensor de distancia");
   // }
   maquina_estados();
+
+  int reading = digitalRead(buttonPin);
+  if (reading != ledState && millis() - lastDebounceTime > debounceDelay) {
+    ledState = reading;
+    lastDebounceTime = millis();
+  }
+
 }
