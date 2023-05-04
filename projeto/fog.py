@@ -14,6 +14,7 @@ PATH_TO_AMAZON_ROOT_CA_1 = "certificates/root.pem"
 
 MESSAGE = "Hello World"
 TOPIC = "pet"
+DEVICE_ASKING_FOR_CONFIG = "device_asking_for_config"
 CLOUD_TOPIC_TO_SUBSCRIBE = "config"
 
 # MQTT Local
@@ -23,6 +24,9 @@ LOCAL_BROKER_TOPIC = "pet"
 # generate client ID with pub prefix randomly
 USERNAME_BROKER_LOCAL = 'teste'
 PASSWORD_BROKER_LOCAL = 'teste'
+
+device_ids = {}
+device_values = {}
 
 # Spin up resources
 event_loop_group = io.EventLoopGroup(1)
@@ -68,6 +72,10 @@ def on_cloud_message_received(topic, payload, **kwargs):
     
     print("Received message from topic '{}': {}".format(topic, payload))
 
+    # Recebeu a mensagem de configuração
+    decoded_message = json.loads(payload.decode())
+    print("Decoded message: {}".format(decoded_message))
+
     config_received = True
     config_body = payload
     
@@ -92,10 +100,18 @@ def connect_mqtt() -> mqtt_client:
 def subscribe():
     global client_global
     def on_message(client, userdata, msg):
-        m_in = json.loads(json.loads(msg.payload.decode()))
+        m_in = json.loads(msg.payload.decode())
+
+        if(type(m_in) == str):
+            m_in = json.loads(m_in)
         
-        m_in["data"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        mqtt_connection.publish(topic=TOPIC, payload=json.dumps(m_in), qos=mqtt.QoS.AT_LEAST_ONCE)
+        if msg.topic == LOCAL_BROKER_TOPIC:
+            m_in["data"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            mqtt_connection.publish(topic=TOPIC, payload=json.dumps(m_in), qos=mqtt.QoS.AT_LEAST_ONCE)
+        
+        elif msg.topic == DEVICE_ASKING_FOR_CONFIG:
+            print(f"Received {m_in} from {msg.topic} topic asking for config")
+
         print(f"Received {m_in} from {msg.topic} topic")
     
     
