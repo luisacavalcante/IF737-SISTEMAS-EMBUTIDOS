@@ -13,7 +13,7 @@ const int buttonPin = 15;            // Pino digital conectado ao botão
 bool ledState = false;               // Variável para armazenar o estado do LED
 unsigned long lastDebounceTime = 0;  // Último momento em que o botão foi acionado
 unsigned long debounceDelay = 50;
-boolean flagDeuHorariodeComer = false;
+boolean flagDeuHorarioDeComer = false;
 
 #define ECHO_PIN 18
 #define TRIGGER_PIN 19
@@ -46,21 +46,21 @@ const int daylightOffset_sec = -10800;
  * @brief Configuração do Wifi
  * 
  */
-const char* ssid = "APT 103_OI FIBRA";
-const char* password = "jajejo22";
+// const char* ssid = "APT 103_OI FIBRA";
+// const char* password = "jajejo22";
 // const char* ssid = "Kilner's House";
 // const char* password = "kilner131813";
-//  const char* ssid = "CINGUESTS";
-//  const char* password = "acessocin";
+const char* ssid = "CINGUESTS";
+const char* password = "acessocin";
 // const char *ssid     = "LIVE TIM_1901_2G";
 //const char *password = "danivalberlu";
 /**
  * @brief Configurações do MQTT
  * 
  */
-const char* serverMQTT = "192.168.1.70";
+const char* serverMQTT = "172.22.67.158";
 const char* topicoPublish = "pet";
-const char* topicoSubscribe = "config";
+const char* topicoSubscribe = "config/IOTreat";
 const char* usernameMQTT = "teste";  // MQTT username
 const char* passwordMQTT = "teste";  // MQTT password
 const char* clientID = "IOTreat";    // MQTT client ID
@@ -126,9 +126,11 @@ void pararEncherPote() {
   tone(BUZZER, 0);
 }
 
-void setFlagDeuHorarioDeComer() {
-  Serial.println("Deu horario de comer");
-  flagDeuHorariodeComer = true;
+void setflagDeuHorarioDeComer() {
+  Serial.print("Cron deu horario de comer, valor flag ja_comeu "); Serial.println(ja_comeu);
+
+  flagDeuHorarioDeComer = true;
+  
 }
 
 void maquina_estados() {
@@ -148,7 +150,7 @@ void maquina_estados() {
       break;
     case ENCHENDO_POTE:
       lerPesoPote();
-      Serial.println(pesoPote);
+      // Serial.println(pesoPote);
       if (pesoPote >= PESO_CONFIGURACAO_MAXIMO) {
         pararEncherPote();
         estado = ESPERANDO_ANIMAL_PARA_COMER;
@@ -192,8 +194,12 @@ void maquina_estados() {
           Serial.println("Proxima hora: " + String(hora_comida));
 
           Serial.println("O animal comeu tudo");
+          
+          flagDeuHorarioDeComer = false;
+          
           sendData(TIPO_COMEU_TUDO);
         } else {
+          ja_comeu = false;
           estado = ESPERANDO_ANIMAL_PARA_COMER;
           Serial.println("O animal veio no pote mas não comeu tudo ainda");
           sendData(TIPO_NAO_COMEU_TUDO);
@@ -207,6 +213,7 @@ void maquina_estados() {
       // Serial.println(ledState);
       // Serial.println("---------------");
       if (deuHorarioDeComer()) {
+        ja_comeu = false;
         estado = ENCHENDO_POTE;
         Serial.println("Enchendo o pote novamente");
         encherPote();
@@ -219,11 +226,7 @@ void maquina_estados() {
 
 
 boolean deuHorarioDeComer() {
-  if(flagDeuHorariodeComer) {
-    flagDeuHorariodeComer = false;
-    return true;
-  }
-  return false;
+  return flagDeuHorarioDeComer;
   // leitura_data_e_hora();
   // if (hora > hora_comida) {
   //   if (ja_comeu == false) {
@@ -281,16 +284,6 @@ void subscribeMQTT(String topic) {
   if (pubSubClient.connected()) {
     pubSubClient.subscribe(topic.c_str());
     Serial.println("Subscribe successful");
-  } else {
-    Serial.println("MQTT Disconnected");
-  }
-}
-
-void publishMQTT(String topic, String message) {
-  Serial.println("Entrei no publishMQTT");
-  if (pubSubClient.connected()) {
-    Serial.println("Conexão funcionando");
-    pubSubClient.publish(topic.c_str(), message.c_str());
   } else {
     Serial.println("MQTT Disconnected");
   }
@@ -391,7 +384,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   Serial.println(messageTemp);
 
-  if (String(topic) == "config") {
+  if (String(topic) == String(topicoSubscribe)) {
     configRecebida = true;
     //DynamicJsonDocument doc(1024);
     //DeseralizeJson(doc,messageTemp);
@@ -408,7 +401,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
       const char* horas_aux = doc["horas"][i];
       Serial.println("Horas: " + String(horas_aux));
       // HORAS[i] = 10 * ((int)horas_aux[0] - '0') + ((int)horas_aux[1] - '0');
-      Cron.create(strdup(horas_aux), setFlagDeuHorarioDeComer, false); 
+      Cron.create(strdup(horas_aux), setflagDeuHorarioDeComer, false); 
     }
 
 
@@ -431,6 +424,7 @@ void sendData(int tipo) {
   DynamicJsonDocument doc(1024);
   doc["tipo"] = tipo;
   doc["peso"] = pesoPote;
+  doc["device_id"] = clientID;
 
   char out[256];
   int b = serializeJson(doc, out);
@@ -443,6 +437,7 @@ void sendData(int tipo) {
 }
 
 void askFogForConfig() {
+  Serial.println("Asking fog for config for device id: " + String(clientID));
   DynamicJsonDocument doc(1024);
   doc["device_id"] = clientID;
   char out[256];
@@ -496,20 +491,23 @@ void setup() {
 
   subscribeMQTT(topicoSubscribe);
 
-  askForFogConfig();
+  askFogForConfig();
 
   pubSubClient.setCallback(callback);
 }
 int last_time_delay = 0;
 void loop() {
   Cron.delay();
+  
+  if(!isWifiConnected()){
+    Serial.println("WiFi disconnected, attempting reconnection");
+    conecta_internet();
+  }
+
   if (!pubSubClient.connected()) {
     reconnectMQTT();
   }
 
-  if(!isWifiConnected()){
-    conecta_internet();
-  }
 
   pubSubClient.loop();
 

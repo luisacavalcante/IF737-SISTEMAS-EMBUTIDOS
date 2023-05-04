@@ -25,8 +25,9 @@ LOCAL_BROKER_TOPIC = "pet"
 USERNAME_BROKER_LOCAL = 'teste'
 PASSWORD_BROKER_LOCAL = 'teste'
 
-device_ids = {}
-device_values = {}
+devices_configs = {}
+list_of_devices = []
+list_of_devices_asking_for_config = []
 
 # Spin up resources
 event_loop_group = io.EventLoopGroup(1)
@@ -74,12 +75,19 @@ def on_cloud_message_received(topic, payload, **kwargs):
 
     # Recebeu a mensagem de configuração
     decoded_message = json.loads(payload.decode())
-    print("Decoded message: {}".format(decoded_message))
+    # print("Decoded message: {}".format(decoded_message))
 
-    config_received = True
-    config_body = payload
+    if topic == CLOUD_TOPIC_TO_SUBSCRIBE:
+        devices_configs[decoded_message["device_id"]] = decoded_message
+        # print("Devices configs: {}".format(devices_configs))
     
-    publish_config("config")
+        print("Sending config to {}".format(decoded_message["device_id"]))
+        client_global.publish(f"config/{decoded_message['device_id']}", json.dumps(decoded_message))
+        
+    # config_received = True
+    # config_body = payload
+    
+    # publish_config("config")
         
 
 def connect_mqtt() -> mqtt_client:
@@ -101,21 +109,28 @@ def subscribe():
     global client_global
     def on_message(client, userdata, msg):
         m_in = json.loads(msg.payload.decode())
+        print(f"Received {m_in} from {msg.topic} topic")
 
         if(type(m_in) == str):
             m_in = json.loads(m_in)
         
         if msg.topic == LOCAL_BROKER_TOPIC:
             m_in["data"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            print(f"Sending {m_in} to {TOPIC} topic")
             mqtt_connection.publish(topic=TOPIC, payload=json.dumps(m_in), qos=mqtt.QoS.AT_LEAST_ONCE)
         
         elif msg.topic == DEVICE_ASKING_FOR_CONFIG:
-            print(f"Received {m_in} from {msg.topic} topic asking for config")
+            print(f"Device { m_in['device_id'] } asking for config")
+            if devices_configs.get(m_in['device_id']) is not None:
+                print(f"Device { m_in['device_id'] } already has config saved")
+                print("Sending config to {}".format(m_in['device_id']))
+                client_global.publish(f"config/{m_in['device_id']}", json.dumps(devices_configs[m_in['device_id']]))
+            else:
+                print(f"Device { m_in['device_id'] } config not found")
 
-        print(f"Received {m_in} from {msg.topic} topic")
-    
     
     client_global.subscribe(LOCAL_BROKER_TOPIC)
+    client_global.subscribe(DEVICE_ASKING_FOR_CONFIG)
     client_global.on_message = on_message
     print(f'Subscribed to local MQTT Broker {LOCAL_BROKER_TOPIC}')
     
